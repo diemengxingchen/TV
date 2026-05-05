@@ -124,7 +124,8 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
                 startActivity(intent);
                 // 这里不写 finish()，返回时就能回到首页
             }, 1000);
-        
+        }
+    }
     @Override
     protected void initView(Bundle savedInstanceState) {
         mResult = Result.empty();
