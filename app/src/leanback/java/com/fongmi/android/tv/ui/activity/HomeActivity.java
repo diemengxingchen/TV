@@ -1,5 +1,4 @@
 package com.fongmi.android.tv.ui.activity;
-
 import android.annotation.SuppressLint;
 import android.app.SearchManager;
 import android.content.Intent;
