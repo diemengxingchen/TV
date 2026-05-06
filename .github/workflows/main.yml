@@ -1,13 +1,10 @@
-name: Build_TVBox_Final_Fix
+name: Build Android APK
 
 on:
-  workflow_dispatch:
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  workflow_dispatch: # 允许手动点击按钮触发
 
 jobs:
-  android-build:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
@@ -20,35 +17,19 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: 暴力修复 Build.gradle
-        # 既然 57 和 81 行都有错，我们直接把 40 行到文件末尾的敏感逻辑全部屏蔽
-        # 重点：屏蔽所有的 signingConfigs 和自定义 Task
-        run: |
-          rm -f local.properties
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-          
-          # 1. 备份原文件
-          cp app/build.gradle app/build.gradle.bak
-          
-          # 2. 注释掉 40 行以后的所有内容（通常这里开始是签名和自定义逻辑）
-          # 然后补上两个反括号以确保语法正确
-          sed -i '40,$s/^/\/\//' app/build.gradle
-          echo -e "\n}\n}" >> app/build.gradle
+      - name: 创建 local.properties
+        # 这一步是关键，自动指向 GitHub 的 Android SDK 目录
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: 赋予执行权限
         run: chmod +x gradlew
 
-      - name: 强力编译
-        # 使用 assembleDebug，并强制跳过所有检查和报告
-        run: |
-          ./gradlew assembleDebug \
-            -x lint -x test -x check \
-            -Dorg.gradle.internal.problems.report.enabled=false \
-            --no-daemon
+      - name: 编译 Debug 版本
+        # 使用 --no-daemon 避免缓存占用，直接构建 debug 版本
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 上传产物
-        if: always()
+      - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TVBox_Final_APK
-          path: "**/build/outputs/apk/**/*.apk"
+          name: TVBox_Final_Build
+          path: app/build/outputs/apk/**/*.apk
