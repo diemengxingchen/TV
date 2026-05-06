@@ -1,7 +1,7 @@
 name: Build_TVBox
 
 on:
-  workflow_dispatch: # 允许手动点击按钮触发
+  workflow_dispatch:
 
 jobs:
   android-build:
@@ -17,12 +17,18 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: 自动清理冲突文件
+        # 这一步非常关键，删除作者本地的路径配置
+        run: |
+          rm -f local.properties
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
       - name: 赋予执行权限
         run: chmod +x gradlew
 
       - name: 开始编译 APK
-        # 这里使用了 -x lint 和 -x test，彻底跳过 image_4.png 里的那些报错
-        run: ./gradlew assembleDebug -x lint -x test
+        # 如果依然报错，我们加上 --stacktrace 查看具体原因
+        run: ./gradlew assembleDebug -x lint -x test --stacktrace
 
       - name: 上传 APK 产物
         uses: actions/upload-artifact@v4
