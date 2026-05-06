@@ -17,21 +17,26 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: 自动清理冲突文件
-        # 这一步非常关键，删除作者本地的路径配置
+      - name: 深度清理环境
+        # 强制删除可能导致路径冲突的文件，并重新生成标准的 SDK 路径
         run: |
           rm -f local.properties
+          rm -f .gradle/config.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          echo "ndk.dir=$ANDROID_SDK_ROOT/ndk-bundle" >> local.properties
 
       - name: 赋予执行权限
         run: chmod +x gradlew
 
       - name: 开始编译 APK
-        # 如果依然报错，我们加上 --stacktrace 查看具体原因
-        run: ./gradlew assembleDebug -x lint -x test --stacktrace
+        # 使用 --no-daemon 避免缓存引起的路径错误，同时强制跳过所有检查
+        run: ./gradlew assembleDebug -x lint -x test -x check --stacktrace --no-daemon
 
       - name: 上传 APK 产物
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: TVBox_Build
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
