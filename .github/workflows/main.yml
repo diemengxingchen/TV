@@ -17,27 +17,32 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: 安装 Python 3.10
+        # 专门安装 Chaquopy 需要的 3.10 版本
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: 环境预处理与代码手术
         run: |
-          # 1. 安装 Python (Chaquopy 必需)
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip
-          
-          # 2. 暴力删除所有 signingConfigs 块
-          # 使用 perl 直接删除从 signingConfigs 开始到其对应花括号结束的所有内容
+          # 1. 物理移除签名闭包 (解决之前的 null 报错)
           perl -0777 -i -pe 's/signingConfigs\s*\{.*?\}\s*\}\s*//gs' app/build.gradle
-          
-          # 3. 移除 build.gradle 中对 signingConfig 的引用行
           sed -i '/signingConfig/d' app/build.gradle
           
-          # 4. 补齐 SDK 配置文件
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          # 2. 告诉 Chaquopy 插件 Python 3.10 的准确位置
+          # 获取当前 Python 3.10 的执行路径
+          PYTHON_PATH=$(which python3)
+          echo "chaquopy.python.path=$PYTHON_PATH" >> local.properties
+          
+          # 3. 补齐 SDK 配置文件
+          echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
 
       - name: 赋予执行权限
         run: chmod +x gradlew
 
       - name: 强力构建
-        run: ./gradlew assembleDebug --no-daemon
+        # 增加 --info 参数以便在出错时看到更详细的 Python 报错
+        run: ./gradlew assembleDebug --no-daemon --info
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
