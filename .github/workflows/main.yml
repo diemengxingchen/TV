@@ -3,6 +3,10 @@ name: Build Android APK
 on:
   workflow_dispatch:
 
+# 解决 Node.js 20 弃用警告
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,34 +22,35 @@ jobs:
           cache: gradle
 
       - name: 安装 Python 3.10
-        # 专门安装 Chaquopy 需要的 3.10 版本
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
       - name: 环境预处理与代码手术
         run: |
-          # 1. 物理移除签名闭包 (解决之前的 null 报错)
+          # 1. 物理移除签名配置 (解决 null 报错)[span_3](start_span)[span_3](end_span)
           perl -0777 -i -pe 's/signingConfigs\s*\{.*?\}\s*\}\s*//gs' app/build.gradle
           sed -i '/signingConfig/d' app/build.gradle
           
-          # 2. 告诉 Chaquopy 插件 Python 3.10 的准确位置
-          # 获取当前 Python 3.10 的执行路径
+          # 2. 指定 Chaquopy 的 Python 路径[span_4](start_span)[span_4](end_span)
           PYTHON_PATH=$(which python3)
           echo "chaquopy.python.path=$PYTHON_PATH" >> local.properties
           
           # 3. 补齐 SDK 配置文件
-          echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: 赋予执行权限
         run: chmod +x gradlew
 
       - name: 强力构建
-        # 增加 --info 参数以便在出错时看到更详细的 Python 报错
-        run: ./gradlew assembleDebug --no-daemon --info
+        # 编译所有 debug 变体
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TVBox_Final_Fix
-          path: app/build/outputs/apk/debug/*.apk
+          name: TVBox_Build_Result
+          # 关键修改：使用通配符匹配所有可能的变体子目录
+          path: app/build/outputs/apk/**/debug/*.apk
+          # 如果没找到文件，让 Workflow 报错而不是静默失败
+          if-no-files-found: error
