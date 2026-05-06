@@ -1,7 +1,7 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch: # 允许手动点击按钮触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -17,19 +17,32 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: 创建 local.properties
-        # 这一步是关键，自动指向 GitHub 的 Android SDK 目录
-        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+      - name: 彻底手术 - 移除签名锁定
+        # 针对你报错的第 57 行及周边签名逻辑进行物理抹除
+        run: |
+          echo "开始清理签名配置..."
+          # 1. 创建空的 local.properties 防止 SDK 路径报错
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          
+          # 2. 核心修复：将 build.gradle 中所有 signingConfig 相关的行全部注释掉
+          # 这会强制 Gradle 使用系统默认的 debug 签名，从而绕过你那行报错的 null 文件引用
+          sed -i '/signingConfig/s/^/\/\//' app/build.gradle
+          sed -i '/signingConfigs/,/}/s/^/\/\//' app/build.gradle
+          
+          # 3. 如果项目中引用了不存在的 keystore 变量，直接替换为空字符串
+          sed -i 's/file(.*\.jks)/null/g' app/build.gradle
+          
+          echo "清理完成。"
 
       - name: 赋予执行权限
         run: chmod +x gradlew
 
-      - name: 编译 Debug 版本
-        # 使用 --no-daemon 避免缓存占用，直接构建 debug 版本
+      - name: 强力构建 (跳过签名检查)
+        # 使用 assembleDebug 模式，它不强制要求正式签名
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 上传 APK
+      - name: 上传生成的 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TVBox_Final_Build
-          path: app/build/outputs/apk/**/*.apk
+          name: TVBox_Final_Result
+          path: app/build/outputs/apk/debug/*.apk
