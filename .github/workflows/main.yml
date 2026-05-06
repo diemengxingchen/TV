@@ -17,60 +17,34 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: 极简重写 Build.gradle
-        # 这一步会直接重写你的 app/build.gradle，彻底避开旧代码里的所有坑
+      - name: 修复 Python 环境与签名
         run: |
-          cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace 'com.github.tvbox.osc'
-              compileSdk 34
-              
-              defaultConfig {
-                  applicationId "com.github.tvbox.osc"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-                  debug {
-                      debuggable true
-                  }
-              }
-              
-              // 自动声明维度，防止之前的 "flavor dimension" 报错
-              flavorDimensions "default"
-          }
-
-          dependencies {
-              // 保持原有库的依赖
-              implementation fileTree(dir: 'libs', include: ['*.jar'])
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
+          # 1. 安装 Python 环境（Chaquopy 插件构建时需要）
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
           
-          # 创建必要的 SDK 配置文件
+          # 2. 强力修复 app/build.gradle
+          # 使用通配符将所有 file(...) 引用 keystore 的行替换为 null，防止 NullPointerException
+          sed -i 's/file(.*\.jks)/null/g' app/build.gradle
+          sed -i 's/file(.*\.keystore)/null/g' app/build.gradle
+          
+          # 3. 移除强制签名校验逻辑
+          # 这会将 signingConfig 这一行替换成注释，让 Gradle 使用默认 debug 签名
+          sed -i 's/signingConfig signingConfigs.release/\/\/ signingConfig/g' app/build.gradle
+          
+          # 4. 初始化 SDK 路径
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: 赋予执行权限
         run: chmod +x gradlew
 
-      - name: 强力构建 (debug 模式)
-        # debug 构建会自动生成签名，无需任何证书文件
-        run: ./gradlew assembleDebug --no-daemon
+      - name: 开始构建
+        # 使用 --stacktrace 查看 Python 插件具体的安装错误（如果再次失败）
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TVBox_Quick_Build
-          path: app/build/outputs/apk/debug/*.apk
+          name: TVBox_Build
+          path: |
+            app/build/outputs/apk/debug/*.apk
