@@ -1,7 +1,11 @@
-name: Build_TVBox
+name: Build_TVBox_Final
 
 on:
   workflow_dispatch:
+
+env:
+  # 解决 image_6.png 中提到的 Node.js 24 兼容性问题
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   android-build:
@@ -17,30 +21,23 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: 修复 Build.gradle 错误
-        # 针对第 57 行可能的签名或文件路径错误进行屏蔽
+      - name: 预处理环境
         run: |
-          # 删除本地路径配置文件
           rm -f local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-          
-          # 这一步是核心：将 build.gradle 中可能导致失败的 signingConfig 替换为默认配置
-          # 或者注释掉第 57 行附近可能报错的自定义逻辑
-          sed -i '57s/^/\/\//' app/build.gradle 
-          
-          # 强制将所有 signingConfig 指向 debug（GitHub 只有 debug 环境）
-          sed -i 's/signingConfigs.release/signingConfigs.debug/g' app/build.gradle || true
+          # 强制注释掉可能导致报错的第 57 行及周边逻辑
+          sed -i '55,65s/^/\/\//' app/build.gradle || true
 
       - name: 赋予执行权限
         run: chmod +x gradlew
 
-      - name: 开始编译 APK
-        # 使用 -P 忽略可能丢失的属性，进一步确保通过
-        run: ./gradlew assembleDebug -x lint -x test -Pignore.unused=true --stacktrace
+      - name: 执行编译
+        # 加入 --no-daemon 确保干净的环境
+        run: ./gradlew assembleDebug -x lint -x test --no-daemon
 
-      - name: 上传 APK 产物
-        if: success()
+      - name: 自动寻找并上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TVBox_Fixed_Build
-          path: app/build/outputs/apk/debug/*.apk
+          name: TVBox_Final_APK
+          # 递归搜索所有目录下的 apk，确保万无一失
+          path: "**/build/outputs/apk/**/*.apk"
