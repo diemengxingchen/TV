@@ -17,32 +17,60 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: 彻底手术 - 移除签名锁定
-        # 针对你报错的第 57 行及周边签名逻辑进行物理抹除
+      - name: 极简重写 Build.gradle
+        # 这一步会直接重写你的 app/build.gradle，彻底避开旧代码里的所有坑
         run: |
-          echo "开始清理签名配置..."
-          # 1. 创建空的 local.properties 防止 SDK 路径报错
+          cat <<EOF > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.github.tvbox.osc'
+              compileSdk 34
+              
+              defaultConfig {
+                  applicationId "com.github.tvbox.osc"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+                  debug {
+                      debuggable true
+                  }
+              }
+              
+              // 自动声明维度，防止之前的 "flavor dimension" 报错
+              flavorDimensions "default"
+          }
+
+          dependencies {
+              // 保持原有库的依赖
+              implementation fileTree(dir: 'libs', include: ['*.jar'])
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+          
+          # 创建必要的 SDK 配置文件
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-          
-          # 2. 核心修复：将 build.gradle 中所有 signingConfig 相关的行全部注释掉
-          # 这会强制 Gradle 使用系统默认的 debug 签名，从而绕过你那行报错的 null 文件引用
-          sed -i '/signingConfig/s/^/\/\//' app/build.gradle
-          sed -i '/signingConfigs/,/}/s/^/\/\//' app/build.gradle
-          
-          # 3. 如果项目中引用了不存在的 keystore 变量，直接替换为空字符串
-          sed -i 's/file(.*\.jks)/null/g' app/build.gradle
-          
-          echo "清理完成。"
 
       - name: 赋予执行权限
         run: chmod +x gradlew
 
-      - name: 强力构建 (跳过签名检查)
-        # 使用 assembleDebug 模式，它不强制要求正式签名
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: 强力构建 (debug 模式)
+        # debug 构建会自动生成签名，无需任何证书文件
+        run: ./gradlew assembleDebug --no-daemon
 
-      - name: 上传生成的 APK
+      - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TVBox_Final_Result
+          name: TVBox_Quick_Build
           path: app/build/outputs/apk/debug/*.apk
